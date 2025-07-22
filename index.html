@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>ePacjent (symulacja)</title>
+<style>
+  body { font-family: Arial, sans-serif; margin: 0; background: #f0f4f7; }
+  header { background: #004e89; color: white; padding: 15px; text-align: center; font-size: 1.2em; font-weight: bold; }
+  #alert { background: #ffcccc; color: #900; padding: 10px; text-align: center; font-weight: bold; }
+  #login, #mainApp { max-width: 700px; margin: 40px auto; background: white; padding: 20px; border-radius: 6px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+  label { display: block; margin: 12px 0 4px; }
+  input[type=text], input[type=date], select, input[type=password] { width: 100%; padding: 8px; box-sizing: border-box; }
+  button { margin-top: 15px; padding: 10px 18px; background: #004e89; color: white; border: none; border-radius: 4px; cursor: pointer; }
+  button:hover { background: #003559; }
+  nav { margin-top: 20px; }
+  nav button { margin-right: 10px; }
+  .patient-list { margin-top: 20px; }
+  .patient-item { border-bottom: 1px solid #ccc; padding: 10px 0; cursor: pointer; }
+  .patient-item:hover { background: #e6f0ff; }
+  .section { margin-top: 20px; }
+  .pdf-list { margin-top: 10px; }
+  .pdf-item { margin-bottom: 6px; }
+</style>
+</head>
+<body>
+
+<header>System ePacjent (symulacja do gry komputerowej)</header>
+<div id="alert">Uwaga! Ta strona jest symulacją i nie ma nic wspólnego z prawdziwym życiem ani rzeczywistymi danymi medycznymi.</div>
+
+<div id="login">
+  <h2>Logowanie</h2>
+  <label for="loginInput">Login:</label>
+  <input type="text" id="loginInput" autocomplete="off" />
+  <label for="passwordInput">Hasło:</label>
+  <input type="password" id="passwordInput" autocomplete="off" />
+  <button onclick="login()">Zaloguj się</button>
+  <p id="loginError" style="color:red; display:none;">Nieprawidłowy login lub hasło.</p>
+</div>
+
+<div id="mainApp" style="display:none;">
+  <nav>
+    <button onclick="showSection('patientsSection')">Pacjenci</button>
+  </nav>
+
+  <div id="patientsSection" style="display:none;">
+    <h2>Pacjenci</h2>
+    <button onclick="showCreatePatient()">Utwórz kartotekę pacjenta</button>
+
+    <div id="createPatientForm" style="display:none; margin-top:20px;">
+      <h3>Nowa kartoteka pacjenta</h3>
+      <label>Imię:</label><input type="text" id="firstName" />
+      <label>Nazwisko:</label><input type="text" id="lastName" />
+      <label>Data urodzenia:</label><input type="date" id="birthDate" />
+      <label>PESEL:</label><input type="text" id="pesel" maxlength="11" />
+      <label>Płeć:</label>
+      <select id="gender">
+        <option value="">-- wybierz --</option>
+        <option value="Kobieta">Kobieta</option>
+        <option value="Mężczyzna">Mężczyzna</option>
+        <option value="Inna">Inna</option>
+      </select>
+      <label>Miejsce zamieszkania:</label><input type="text" id="residence" />
+      <label>Obywatelstwo:</label><input type="text" id="citizenship" />
+      <button onclick="createPatient()">Zapisz kartotekę</button>
+      <p id="createPatientError" style="color:red; display:none;"></p>
+    </div>
+
+    <div id="patientList" class="patient-list"></div>
+  </div>
+
+  <div id="patientDetail" style="display:none;">
+    <button onclick="backToPatients()">← Powrót do listy pacjentów</button>
+    <h2>Kartoteka pacjenta</h2>
+    <div id="patientInfo"></div>
+
+    <div class="section">
+      <h3>Historia leczenia</h3>
+      <input type="file" accept="application/pdf" onchange="addDocument(event, 'historiaLeczenia')" />
+      <div id="historiaLeczeniaList" class="pdf-list"></div>
+    </div>
+
+    <div class="section">
+      <h3>e-skierowania</h3>
+      <input type="file" accept="application/pdf" onchange="addDocument(event, 'eskierowania')" />
+      <div id="eskierowaniaList" class="pdf-list"></div>
+    </div>
+
+    <div class="section">
+      <h3>e-recepty</h3>
+      <input type="file" accept="application/pdf" onchange="addDocument(event, 'erecepty')" />
+      <div id="ereceptyList" class="pdf-list"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // Klucz do localStorage
+  const STORAGE_KEY = 'epacjent_patients';
+
+  let patients = [];
+  let currentPatientIndex = null;
+
+  // Wczytaj dane z localStorage
+  function loadPatients() {
+    const data = localStorage.getItem(STORAGE_KEY);
+    if (data) {
+      try {
+        patients = JSON.parse(data);
+      } catch {
+        patients = [];
+      }
+    }
+  }
+
+  // Zapisz dane do localStorage
+  function savePatients() {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(patients));
+  }
+
+  function login() {
+    const loginVal = document.getElementById('loginInput').value.trim();
+    const passVal = document.getElementById('passwordInput').value.trim();
+    const err = document.getElementById('loginError');
+
+    if (loginVal === 'SPZOZ' && passVal === 'P421O') {
+      err.style.display = 'none';
+      document.getElementById('login').style.display = 'none';
+      document.getElementById('mainApp').style.display = 'block';
+      loadPatients();
+      showSection('patientsSection');
+      refreshPatientList();
+    } else {
+      err.style.display = 'block';
+    }
+  }
+
+  function showSection(sectionId) {
+    document.getElementById('patientsSection').style.display = 'none';
+    document.getElementById('patientDetail').style.display = 'none';
+
+    document.getElementById(sectionId).style.display = 'block';
+
+    if (sectionId === 'patientsSection') {
+      refreshPatientList();
+      document.getElementById('createPatientForm').style.display = 'none';
+    }
+  }
+
+  function showCreatePatient() {
+    document.getElementById('createPatientForm').style.display = 'block';
+  }
+
+  function createPatient() {
+    const firstName = document.getElementById('firstName').value.trim();
+    const lastName = document.getElementById('lastName').value.trim();
+    const birthDate = document.getElementById('birthDate').value;
+    const pesel = document.getElementById('pesel').value.trim();
+    const gender = document.getElementById('gender').value;
+    const residence = document.getElementById('residence').value.trim();
+    const citizenship = document.getElementById('citizenship').value.trim();
+    const errorEl = document.getElementById('createPatientError');
+
+    errorEl.style.display = 'none';
+    if (!firstName || !lastName || !birthDate || !pesel || !gender || !residence || !citizenship) {
+      errorEl.textContent = 'Proszę wypełnić wszystkie pola.';
+      errorEl.style.display = 'block';
+      return;
+    }
+    if (pesel.length !== 11 || !/^\d{11}$/.test(pesel)) {
+      errorEl.textContent = 'PESEL musi mieć 11 cyfr.';
+      errorEl.style.display = 'block';
+      return;
+    }
+
+    patients.push({
+      firstName,
+      lastName,
+      birthDate,
+      pesel,
+      gender,
+      residence,
+      citizenship,
+      documents: {
+        historiaLeczenia: [],
+        eskierowania: [],
+        erecepty: []
+      }
+    });
+
+    savePatients();
+
+    document.getElementById('firstName').value = '';
+    document.getElementById('lastName').value = '';
+    document.getElementById('birthDate').value = '';
+    document.getElementById('pesel').value = '';
+    document.getElementById('gender').value = '';
+    document.getElementById('residence').value = '';
+    document.getElementById('citizenship').value = '';
+
+    document.getElementById('createPatientForm').style.display = 'none';
+    refreshPatientList();
+  }
+
+  function refreshPatientList() {
+    const list = document.getElementById('patientList');
+    list.innerHTML = '';
+    if (patients.length === 0) {
+      list.textContent = 'Brak pacjentów.';
+      return;
+    }
+    patients.forEach((p, i) => {
+      const div = document.createElement('div');
+      div.className = 'patient-item';
+      div.textContent = `${p.firstName} ${p.lastName} (PESEL: ${p.pesel})`;
+      div.onclick = () => openPatient(i);
+      list.appendChild(div);
+    });
+  }
+
+  function openPatient(index) {
+    currentPatientIndex = index;
+    const p = patients[index];
+    document.getElementById('patientsSection').style.display = 'none';
+    document.getElementById('patientDetail').style.display = 'block';
+
+    const info = `
+      <p><strong>Imię:</strong> ${p.firstName}</p>
+      <p><strong>Nazwisko:</strong> ${p.lastName}</p>
+      <p><strong>Data urodzenia:</strong> ${p.birthDate}</p>
+      <p><strong>PESEL:</strong> ${p.pesel}</p>
+      <p><strong>Płeć:</strong> ${p.gender}</p>
+      <p><strong>Miejsce zamieszkania:</strong> ${p.residence}</p>
+      <p><strong>Obywatelstwo:</strong> ${p.citizenship}</p>
+    `;
+    document.getElementById('patientInfo').innerHTML = info;
+
+    refreshDocumentLists();
+  }
+
+  function backToPatients() {
+    currentPatientIndex = null;
+    showSection('patientsSection');
+  }
+
+  function addDocument(event, section) {
+    if (currentPatientIndex === null) return;
+    const file = event.target.files[0];
+    if (!file) return;
+    if (file.type !== 'application/pdf') {
+      alert('Proszę wybrać plik PDF.');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      patients[currentPatientIndex].documents[section].push({
+        name: file.name,
+        url: e.target.result
+      });
+      savePatients();
+      refreshDocumentLists();
+    };
+    reader.readAsDataURL(file);
+
+    event.target.value = '';
+  }
+
+  function refreshDocumentLists() {
+    if (currentPatientIndex === null) return;
+    const p = patients[currentPatientIndex];
+
+    const mapSections = {
+      historiaLeczenia: 'historiaLeczeniaList',
+      eskierowania: 'eskierowaniaList',
+      erecepty: 'ereceptyList'
+    };
+
+    for (const sec in mapSections) {
+      const container = document.getElementById(mapSections[sec]);
+      container.innerHTML = '';
+      p.documents[sec].forEach(doc => {
+        const div = document.createElement('div');
+        div.className = 'pdf-item';
+        const link = document.createElement('a');
+        link.href = '#';
+        link.textContent = doc.name;
+        link.onclick = (e) => {
+          e.preventDefault();
+          window.open(doc.url, '_blank');
+        };
+        div.appendChild(link);
+        container.appendChild(div);
+      });
+    }
+  }
+</script>
+
+"firebase/app";import { getAnalytics } z "firebase/analytics"; TODO: Dodaj pakiety SDK dla produktów Firebase, których chcesz używać https://firebase.google.com/docs/web/setup#available-libraries konfiguracji Firebase Twojej aplikacji internetowej W przypadku pakietu Firebase JS SDK w wersji 7.20.0 i nowszych measurementId jest opcjonalnyconst firebaseConfig = {: "AIzaSyBw0K2pJqH1RID8xtl0c0kODLaFKHKz7Hw",:  "dotyczy-odgrywania-roli-w-grze.firebaseapp.com",: "dotyczy-odgrywania-roli-w-grze",: "dotyczy-odgrywania-roli-w-grze.firebasestorage.app",: "462435136793",: "1:462435136793:web:fe9925c35bbf9130e04188", : "G-VBNXE280TD"}; Zainicjuj aplikację Firebase const = initializeApp(firebaseConfig);const analytics = getAnalytics(aplikacja
+
+</body>
+</html>
