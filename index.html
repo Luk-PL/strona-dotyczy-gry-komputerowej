@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Symulacja Systemu e-Recepty</title>
+<style>
+  body {
+    font-family: Arial, sans-serif;
+    margin: 20px; 
+    background-color: #f9f9f9;
+  }
+  h1, h2 {
+    text-align: center;
+  }
+  #info {
+    background-color: #fff3cd;
+    color: #856404;
+    border: 1px solid #ffeeba;
+    padding: 10px;
+    margin-bottom: 20px;
+    font-size: 0.9em;
+    text-align:center;
+  }
+  .buttons {
+    text-align: center;
+    margin-bottom: 25px;
+  }
+  button {
+    padding: 12px 20px;
+    margin: 5px;
+    font-size: 1.1em;
+    cursor: pointer;
+  }
+  form {
+    max-width: 820px;
+    margin: auto;
+    background: white;
+    padding: 20px;
+    border: 2px solid #333;
+    box-shadow: 2px 2px 8px rgba(0,0,0,0.2);
+    border-radius: 6px;
+  }
+  label {
+    display: block;
+    margin-top: 12px;
+    font-weight: bold;
+  }
+  input[type=text], input[type=date], select, textarea {
+    width: 100%;
+    padding: 6px;
+    margin-top: 4px;
+    box-sizing: border-box;
+  }
+  .two-column {
+    display: flex;
+    gap: 15px;
+    flex-wrap: wrap;
+  }
+  .two-column > div {
+    flex: 1;
+    min-width: 200px;
+  }
+  .form-section {
+    margin-top: 20px;
+    border-top: 1px solid #999;
+    padding-top: 10px;
+  }
+  .tooltip {
+    position: relative;
+  }
+  .tooltip .tiptext {
+    visibility: hidden;
+    background-color: #333;
+    color: #fff;
+    text-align: left;
+    border-radius: 5px;
+    padding: 8px;
+    position: absolute;
+    z-index: 10;
+    top: 125%; 
+    left: 0;
+    width: 280px;
+    font-size: 0.9em;
+  }
+  .tooltip:hover .tiptext {
+    visibility: visible;
+  }
+  #idRecepty {
+    font-weight: bold;
+    font-size: 1.1em;
+    margin-left: 15px;
+  }
+  .id-button {
+    margin-left: 5px;
+    padding: 6px 12px;
+    font-size: 1em;
+  }
+  #downloadBtn {
+    margin-top: 20px;
+    background-color: #00529B;
+    color: white;
+    border: none;
+    border-radius: 4px;
+  }
+  #downloadBtn:hover {
+    background-color: #003f70;
+  }
+</style>
+</head>
+<body>
+
+<div id="info">
+  <strong>UWAGA:</strong> Ta strona została stworzona wyłącznie na potrzeby odgrywania roli w grze komputerowej i <u>nie ma nic wspólnego z prawdziwą dokumentacją medyczną</u>.
+</div>
+
+<h1>Symulacja systemu e-Recepty</h1>
+
+<div class="buttons">
+  <button onclick="showForm('recepta')">Wystaw receptę</button>
+  <button onclick="alert('Funkcja wystawienia skierowania do/na jest w trakcie realizacji')">Wystaw skierowanie do/na</button>
+  <button onclick="alert('Funkcja wystawienia skierowania do laboratorium jest w trakcie realizacji')">Wystaw skierowanie do laboratorium</button>
+</div>
+
+<div id="formContainer"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script>
+  const leki = [
+    {nazwa: "Paracetamol", dawkowanie: "500mg co 4-6h", dzialanie: "Przeciwbólowe, przeciwgorączkowe", substancja: "Paracetamol", przeciwwskazania: "Niewydolność wątroby"},
+    {nazwa: "Ibuprofen", dawkowanie: "200-400mg co 6-8h", dzialanie: "Przeciwzapalne, przeciwbólowe", substancja: "Ibuprofen", przeciwwskazania: "Astma, choroba wrzodowa"},
+    {nazwa: "Amoksycylina", dawkowanie: "500mg co 8h", dzialanie: "Antybiotyk", substancja: "Amoksycylina", przeciwwskazania: "Alergia na penicyliny"},
+    {nazwa: "Aspiryna", dawkowanie: "75-100mg dziennie", dzialanie: "Przeciwzakrzepowe", substancja: "Kwasy acetylosalicylowy", przeciwwskazania: "Czynne krwawienia"},
+    {nazwa: "Metformina", dawkowanie: "500mg 2 razy dziennie", dzialanie: "Obniża poziom glukozy", substancja: "Metformina", przeciwwskazania: "Niewydolność nerek"},
+    {nazwa: "Loratadyna", dawkowanie: "10mg raz dziennie", dzialanie: "Przeciwalergiczne", substancja: "Loratadyna", przeciwwskazania: "Nadwrażliwość"},
+    {nazwa: "Simwastatyna", dawkowanie: "20-40mg raz dziennie", dzialanie: "Obniża cholesterol", substancja: "Simwastatyna", przeciwwskazania: "Choroby wątroby"},
+    {nazwa: "Omeprazol", dawkowanie: "20mg raz dziennie", dzialanie: "Zmniejsza wydzielanie kwasu żołądkowego", substancja: "Omeprazol", przeciwwskazania: "Nadwrażliwość"},
+    {nazwa: "Prednizon", dawkowanie: "5mg dziennie", dzialanie: "Lek przeciwzapalny", substancja: "Prednizon", przeciwwskazania: "Czynna infekcja"},
+    {nazwa: "Diazepam", dawkowanie: "2-10mg 2-4x dziennie", dzialanie: "Przeciwlękowe", substancja: "Diazepam", przeciwwskazania: "Zespół obturacyjny"},
+    {nazwa: "Furosemid", dawkowanie: "40mg raz dziennie", dzialanie: "Diuretyk pętlowy", substancja: "Furosemid", przeciwwskazania: "Hiponatremia"},
+    {nazwa: "Kaptopril", dawkowanie: "25-50mg 2x dziennie", dzialanie: "Obniża ciśnienie", substancja: "Kaptopril", przeciwwskazania: "Ciąża"},
+    {nazwa: "Metoprolol", dawkowanie: "50mg 2x dziennie", dzialanie: "Beta-bloker", substancja: "Metoprolol", przeciwwskazania: "Astma oskrzelowa"},
+    {nazwa: "Salbutamol", dawkowanie: "2 inhalacje co 4-6h", dzialanie: "Rozkurcz oskrzeli", substancja: "Salbutamol", przeciwwskazania: "Nadwrażliwość"},
+    {nazwa: "Witamina D", dawkowanie: "1000 IU dziennie", dzialanie: "Reguluje gospodarkę wapniową", substancja: "Cholekalcyferol", przeciwwskazania: "Hiperkalcemia"},
+    {nazwa: "Ceftriakson", dawkowanie: "1g co 24h", dzialanie: "Antybiotyk", substancja: "Ceftriakson", przeciwwskazania: "Alergia na cefalosporyny"},
+    {nazwa: "Amlodypina", dawkowanie: "5-10mg raz dziennie", dzialanie: "Obniża ciśnienie", substancja: "Amlodypina", przeciwwskazania: "Obrzęk płuc"},
+    {nazwa: "Sertralina", dawkowanie: "50mg raz dziennie", dzialanie: "Antydepresant", substancja: "Sertralina", przeciwwskazania: "Ostry zespół maniakalny"},
+    {nazwa: "Levothyroxine", dawkowanie: "25-200mcg dziennie", dzialanie: "Hormonalna terapia tarczycy", substancja: "Lewotyroksyna", przeciwwskazania: "Nieuregulowana choroba serca"},
+    {nazwa: "Nitrogliceryna", dawkowanie: "Podjęzykowo 0,3-0,6mg", dzialanie: "Rozszerza naczynia", substancja: "Nitrogliceryna", przeciwwskazania: "Niedociśnienie"}
+  ];
+
+  function showForm(formName) {
+    let container = document.getElementById('formContainer');
+    if(formName === 'recepta'){
+      container.innerHTML = generateReceptaForm();
+    } else {
+      container.innerHTML = `<p>Funkcja w trakcie realizacji.</p>`;
+    }
+  }
+
+  function generateReceptaForm(){
+    let options = leki.map(le => `
+      <option value="${le.nazwa}" 
+        data-dawkowanie="${le.dawkowanie}" 
+        data-dzialanie="${le.dzialanie}" 
+        data-substancja="${le.substancja}"
+        data-przeciwwskazania="${le.przeciwwskazania}">
+        ${le.nazwa}
+      </option>`).join('');
+
+    return `
+      <form id="receptaForm">
+        <h2>Wystaw receptę</h2>
+        <div>
+          <label>ID RECEPTY: 
+            <span id="idRecepty">-</span>
+            <button type="button" class="id-button" onclick="generateIDRecepty()">Ustal ID recepty</button>
+          </label>
+        </div>
+
+        <fieldset class="form-section">
+          <legend>Pacjent</legend>
+          <div class="two-column">
+            <div>
+              <label>Imię i nazwisko:</label>
+              <input type="text" name="pacjentImie" required />
+            </div>
+            <div>
+              <label>PESEL:</label>
+              <input type="text" name="pacjentPesel" pattern="\\d{11}" title="11 cyfr" required />
+            </div>
+          </div>
+          <div class="two-column">
+            <div>
+              <label>Data urodzenia:</label>
+              <input type="date" name="pacjentData" required />
+            </div>
+            <div>
+              <label>Miejsce zamieszkania:</label>
+              <select name="pacjentMiejsce">
+                <option>Poznań</option>
+                <option>Warszawa</option>
+                <option>Kraków</option>
+                <option>Łódź</option>
+                <option>Wrocław</option>
+                <!-- inne miasta -->
+              </select>
+            </div>
+          </div>
+        </fieldset>
+
+        <fieldset class="form-section">
+          <legend>Wystawca</legend>
+          <label>Imię i nazwisko:</label>
+          <input type="text" name="wystawcaImie" required />
+          <label>Specjalizacja:</label>
+          <input type="text" name="wystawcaSpecjalizacja" />
+          <label>Numer telefonu:</label>
+          <input type="text" name="wystawcaTelefon" />
+        </fieldset>
+
+        <fieldset class="form-section">
+          <legend>Recepta 1</legend>
+          <label>Na lek:</label>
+          <div class="tooltip">
+            <select id="lekSelect" name="lek" onchange="fillLekInfo()" required>
+              <option value="">-- wybierz lek lub wpisz własny --</option>
+              ${options}
+              <option value="inny">Inny (wpisz nazwę poniżej)</option>
+            </select>
+            <div class="tiptext" id="tooltipInfo"></div>
+          </div>
+          <label>Nazwa własna leku (jeśli inny):</label>
+          <input type="text" id="customLekNazwa" oninput="clearTooltip()" placeholder="Wpisz nazwę leku spoza listy" disabled />
+          <label>Dawkowanie:</label>
+          <input type="text" name="dawkowanie" id="dawkowanie" />
+          <label>Dodatkowe informacje:</label>
+          <textarea name="info" rows="3"></textarea>
+          <label>Data realizacji:</label>
+          <input type="date" name="dataRealizacji" />
+        </fieldset>
+
+        <!--<fieldset class="form-section"><legend>Recepta 2</legend></fieldset>
+        <fieldset class="form-section"><legend>Recepta 3</legend></fieldset>-->
+        <button type="button" id="downloadBtn" onclick="downloadPDF()">Pobierz jako PDF</button>
+      </form>
+    `;
+  }
+
+  function fillLekInfo() {
+    const sel = document.getElementById('lekSelect');
+    const tooltip = document.getElementById('tooltipInfo');
+    const customLek = document.getElementById('customLekNazwa');
+    const dawkowanieInput = document.getElementById('dawkowanie');
+
+    if(sel.value === "inny") {
+      tooltip.style.visibility = "hidden";
+      customLek.disabled = false;
+      dawkowanieInput.value = "";
+      dawkowanieInput.disabled = false;
+    } else if(sel.value === "") {
+      tooltip.style.visibility = "hidden";
+      customLek.disabled = true;
+      customLek.value = "";
+      dawkowanieInput.value = "";
+      dawkowanieInput.disabled = false;
+    } else {
+      customLek.disabled = true;
+      customLek.value = "";
+      dawkowanieInput.disabled = false;
+      // Wypełnij tooltip i dawkowanie
+      const opt = sel.options[sel.selectedIndex];
+      tooltip.innerHTML = `
+        <strong>Dawkowanie:</strong> ${opt.dataset.dawkowanie}<br>
+        <strong>Działanie:</strong> ${opt.dataset.dzialanie}<br>
+        <strong>Substancja czynna:</strong> ${opt.dataset.substancja}<br>
+        <strong>Przeciwwskazania:</strong> ${opt.dataset.przeciwwskazania}
+      `;
+      tooltip.style.visibility = "visible";
+      dawkowanieInput.value = opt.dataset.dawkowanie;
+    }
+  }
+
+  function clearTooltip(){
+    let tooltip = document.getElementById('tooltipInfo');
+    tooltip.style.visibility = "hidden";
+  }
+
+  function generateIDRecepty() {
+    // Generuj ID: dzien+miesiac+godzina+minuta+sekunda + 4 losowe cyfry
+    const now = new Date();
+    const id = 
+      now.getFullYear().toString().slice(2) +
+      ("0"+(now.getMonth()+1)).slice(-2) +
+      ("0"+now.getDate()).slice(-2) +
+      ("0"+now.getHours()).slice(-2) +
+      ("0"+now.getMinutes()).slice(-2) +
+      ("0"+now.getSeconds()).slice(-2) +
+      Math.floor(1000 + Math.random()*9000).toString();
+    document.getElementById('idRecepty').innerText = id;
+  }
+
+  async function downloadPDF() {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+
+    const form = document.getElementById('receptaForm');
+    if(!form) {
+      alert('Najpierw wybierz formularz wystawienia recepty!');
+      return;
+    }
+
+    doc.setFontSize(18);
+    doc.text('RECEPTA (Symulacja)', 14, 20);
+
+    const idRecepty = document.getElementById('idRecepty').innerText;
+    doc.setFontSize(11);
+    doc.text(`ID recepty: ${idRecepty}`, 14, 30);
+
+    doc.text('Pacjent:', 14, 40);
+    doc.setFontSize(10);
+    doc.text(`Imię i nazwisko: ${form.pacjentImie.value}`, 14, 46);
+    doc.text(`PESEL: ${form.pacjentPesel.value}`, 14, 52);
+    doc.text(`Data urodzenia: ${form.pacjentData.value}`, 14, 58);
+    doc.text(`Miejsce zamieszkania: ${form.pacjentMiejsce.value}`, 14, 64);
+
+    doc.setFontSize(11);
+    doc.text('Wystawca:', 14, 74);
+    doc.setFontSize(10);
+    doc.text(`Imię i nazwisko: ${form.wystawcaImie.value}`, 14, 80);
+    doc.text(`Specjalizacja: ${form.wystawcaSpecjalizacja.value}`, 14, 86);
+    doc.text(`Numer telefonu: ${form.wystawcaTelefon.value}`, 14, 92);
+
+    doc.setFontSize(11);
+    doc.text('Recepta 1:', 14, 102);
+    doc.setFontSize(10);
+    let lek = form.lek.value === 'inny' ? form.customLekNazwa.value : form.lek.value;
+    doc.text(`Na lek: ${lek}`, 14, 108);
+    doc.text(`Dawkowanie: ${form.dawkowanie.value}`, 14, 114);
+    doc.text(`Dodatkowe informacje: ${form.info.value}`, 14, 120);
+    doc.text(`Data realizacji: ${form.dataRealizacji.value}`, 14, 126);
+
+    doc.setFontSize(9);
+    doc.setTextColor(150);
+    doc.text('Uwaga: To jest symulacja e-recepty do celów edukacyjno-rozrywkowych.', 14, 140);
+    doc.text('Nie jest to dokument oficjalny ani prawnie obowiązujący.', 14, 146);
+
+    doc.save(`recepta_${idRecepty}.pdf`);
+  }
+</script>
+</body>
+</html>
+
+
