@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Symulacja Systemu e-Recepty z Dynamicznymi Lekami</title>
+<style>
+  body {
+    font-family: Arial, sans-serif;
+    margin: 20px; 
+    background-color: #f9f9f9;
+  }
+  h1, h2 {
+    text-align: center;
+  }
+  #info {
+    background-color: #fff3cd;
+    color: #856404;
+    border: 1px solid #ffeeba;
+    padding: 10px;
+    margin-bottom: 20px;
+    font-size: 0.9em;
+    text-align:center;
+  }
+  .buttons {
+    text-align: center;
+    margin-bottom: 25px;
+  }
+  button {
+    padding: 12px 20px;
+    margin: 5px;
+    font-size: 1.1em;
+    cursor: pointer;
+  }
+  form {
+    max-width: 820px;
+    margin: auto;
+    background: white;
+    padding: 20px;
+    border: 2px solid #333;
+    box-shadow: 2px 2px 8px rgba(0,0,0,0.2);
+    border-radius: 6px;
+  }
+  label {
+    display: block;
+    margin-top: 12px;
+    font-weight: bold;
+  }
+  input[type=text], input[type=date], select, textarea {
+    width: 100%;
+    padding: 6px;
+    margin-top: 4px;
+    box-sizing: border-box;
+  }
+  .two-column {
+    display: flex;
+    gap: 15px;
+    flex-wrap: wrap;
+  }
+  .two-column > div {
+    flex: 1;
+    min-width: 200px;
+  }
+  .form-section {
+    margin-top: 20px;
+    border-top: 1px solid #999;
+    padding-top: 10px;
+  }
+  .tooltip {
+    position: relative;
+    display: inline-block;
+  }
+  .tooltip .tiptext {
+    visibility: hidden;
+    background-color: #333;
+    color: #fff;
+    text-align: left;
+    border-radius: 5px;
+    padding: 8px;
+    position: absolute;
+    z-index: 10;
+    top: 125%; 
+    left: 0;
+    width: 320px;
+    font-size: 0.9em;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.7);
+  }
+  .tooltip:hover .tiptext {
+    visibility: visible;
+  }
+  #idRecepty {
+    font-weight: bold;
+    font-size: 1.1em;
+    margin-left: 15px;
+  }
+  .id-button {
+    margin-left: 5px;
+    padding: 6px 12px;
+    font-size: 1em;
+  }
+  #downloadBtn {
+    margin-top: 20px;
+    background-color: #00529B;
+    color: white;
+    border: none;
+    border-radius: 4px;
+  }
+  #downloadBtn:hover {
+    background-color: #003f70;
+  }
+  .remove-button {
+    background: #d9534f;
+    color: white;
+    border:none;
+    padding: 4px 10px;
+    margin-top: 20px;
+    cursor: pointer;
+    border-radius: 3px;
+  }
+  .remove-button:hover {
+    background: #c9302c;
+  }
+  .lek-block {
+    border: 1px solid #999;
+    padding: 10px;
+    margin-top: 15px;
+    border-radius: 5px;
+    position: relative;
+  }
+  .lek-block > h3 {
+    margin: 0 0 10px 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+</style>
+</head>
+<body>
+
+<div id="info">
+  <strong>UWAGA:</strong> Ta strona została stworzona wyłącznie na potrzeby odgrywania roli w grze komputerowej i <u>nie ma nic wspólnego z prawdziwą dokumentacją medyczną</u>.
+</div>
+
+<h1>Symulacja systemu e-Recepty</h1>
+
+<div class="buttons">
+  <button onclick="showForm('recepta')">Wystaw receptę</button>
+  <button onclick="alert('Funkcja wystawienia skierowania do/na jest w trakcie realizacji')">Wystaw skierowanie do/na</button>
+  <button onclick="alert('Funkcja wystawienia skierowania do laboratorium jest w trakcie realizacji')">Wystaw skierowanie do laboratorium</button>
+</div>
+
+<div id="formContainer"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script>
+  // Dane leków - aktualne handlowe z DOZ (tu uproszczone)
+  // każdy obiekt ma nazwe (handlowa), dawkowanie, działanie, substancję i przeciwwskazania (widoczne w tooltip)
+  const leki = [
+    {nazwa: "Apap 500 mg", dawkowanie: "1 tabletka co 4-6h, max 4 tabletek na dobę", dzialanie: "Przeciwbólowe, przeciwgorączkowe", substancja: "paracetamol", przeciwwskazania: "Niewydolność wątroby, alergia na paracetamol"},
+    {nazwa: "Ibuprom Max", dawkowanie: "1 tabletka co 6-8h", dzialanie: "Przeciwzapalne, przeciwbólowe", substancja: "ibuprofen", przeciwwskazania: "Astma, choroba wrzodowa, niewydolność nerek"},
+    {nazwa: "Amoksiklav", dawkowanie: "500mg co 8h", dzialanie: "Antybiotyk szerokospektralny", substancja: "amoksycylina z kwasem klawulanowym", przeciwwskazania: "Alergia na penicyliny"},
+    {nazwa: "Acard 75 mg", dawkowanie: "1 tabletka raz dziennie", dzialanie: "Przeciwzakrzepowe", substancja: "kwas acetylosalicylowy", przeciwwskazania: "Czynne krwawienia"},
+    {nazwa: "Glucophage 500 mg", dawkowanie: "1 tabletka 2 razy dziennie", dzialanie: "Obniża poziom cukru", substancja: "metformina", przeciwwskazania: "Niewydolność nerek"},
+    {nazwa: "Claritin", dawkowanie: "1 tabletka raz dziennie", dzialanie: "Przeciwalergiczne", substancja: "loratadyna", przeciwwskazania: "Nadwrażliwość"},
+    {nazwa: "Zocor 20 mg", dawkowanie: "1 tabletka raz dziennie", dzialanie: "Obniża cholesterol", substancja: "simwastatyna", przeciwwskazania: "Choroby wątroby"},
+    {nazwa: "Losec 20 mg", dawkowanie: "1 kapsułka raz dziennie", dzialanie: "Zmniejsza wydzielanie kwasu żołądkowego", substancja: "omeprazol", przeciwwskazania: "Nadwrażliwość"},
+    {nazwa: "Deltasone 5 mg", dawkowanie: "1 tabletka dziennie", dzialanie: "Działanie przeciwzapalne i immunosupresyjne", substancja: "prednizon", przeciwwskazania: "Infekcje bakteryjne, wirusowe"},
+    {nazwa: "Relanium 5 mg", dawkowanie: "1 tabletka 2-3 razy dziennie", dzialanie: "Przeciwlękowe", substancja: "diazepam", przeciwwskazania: "Zespół obturacyjny"},
+    {nazwa: "Furosemid 40 mg", dawkowanie: "1 tabletka raz dziennie", dzialanie: "Diuretyk pętlowy", substancja: "furosemid", przeciwwskazania: "Hiponatremia"},
+    {nazwa: "Capoten 25 mg", dawkowanie: "1 tabletka 2x dziennie", dzialanie: "Inhibitor ACE", substancja: "kaptopril", przeciwwskazania: "Ciąża"},
+    {nazwa: "Metocard 50 mg", dawkowanie: "1 tabletka 2x dziennie", dzialanie: "Beta-bloker", substancja: "metoprolol", przeciwwskazania: "Astma oskrzelowa"},
+    {nazwa: "Ventolin inhaler", dawkowanie: "2 wdechy 3-4 razy dziennie", dzialanie: "Bronchodilatator", substancja: "salbutamol", przeciwwskazania: "Nadwrażliwość"},
+    {nazwa: "Vigantol 1000 IU", dawkowanie: "1 kapsułka dziennie", dzialanie: "Wspomaga metabolizm wapnia", substancja: "witamina D3", przeciwwskazania: "Hiperkalcemia"},
+    {nazwa: "Rocephin 1 g", dawkowanie: "1 zastrzyk dziennie", dzialanie: "Antybiotyk cefalosporynowy", substancja: "ceftriakson", przeciwwskazania: "Alergia na cefalosporyny"},
+    {nazwa: "Norvasc 5 mg", dawkowanie: "1 tabletka dziennie", dzialanie: "Bloker kanału wapniowego", substancja: "amlodypina", przeciwwskazania: "Obrzęk płuc"},
+    {nazwa: "Zoloft 50 mg", dawkowanie: "1 tabletka dziennie", dzialanie: "SSRI - antydepresant", substancja: "sertralina", przeciwwskazania: "Mania, leczenie inhibitorami MAO"},
+    {nazwa: "Euthyrox 50 mcg", dawkowanie: "1 tabletka dziennie", dzialanie: "Hormonalna terapia tarczycy", substancja: "lewotyroksyna", przeciwwskazania: "Nieuregulowana choroba serca"},
+    {nazwa: "Nitromint", dawkowanie: "1 tabletka podjęzykowo co 5 min (max 3)", dzialanie: "Rozszerza naczynia wieńcowe", substancja: "nitrogliceryna", przeciwwskazania: "Niedociśnienie"}
+  ];
+
+  // Zmienna przechowująca liczbę recept (leków)
+  let receptaCounter = 1;
+
+  function showForm(formName) {
+    let container = document.getElementById('formContainer');
+    if(formName === 'recepta'){
+      receptaCounter = 1;
+      container.innerHTML = generateReceptaForm();
+    } else {
+      container.innerHTML = `<p>Funkcja w trakcie realizacji.</p>`;
+    }
+  }
+
+  // Generuje formularz z początkową jedną receptą
+  function generateReceptaForm(){
+    return `
+      <form id="receptaForm">
+        <h2>Wystaw receptę</h2>
+        <div>
+          <label>ID RECEPTY: 
+            <span id="idRecepty">-</span>
+            <button type="button" class="id-button" onclick="generateIDRecepty()">Ustal ID recepty</button>
+          </label>
+        </div>
+
+        <fieldset class="form-section">
+          <legend>Pacjent</legend>
+          <div class="two-column">
+            <div>
+              <label>Imię i nazwisko:</label>
+              <input type="text" name="pacjentImie" required />
+            </div>
+            <div>
+              <label>PESEL:</label>
+              <input type="text" name="pacjentPesel" pattern="\\d{11}" title="11 cyfr" required />
+            </div>
+          </div>
+          <div class="two-column">
+            <div>
+              <label>Data urodzenia:</label>
+              <input type="date" name="pacjentData" required />
+            </div>
+            <div>
+              <label>Miejsce zamieszkania:</label>
+              <select name="pacjentMiejsce">
+                <option>Poznań</option>
+                <option>Warszawa</option>
+                <option>Kraków</option>
+                <option>Łódź</option>
+                <option>Wrocław</option>
+              </select>
+            </div>
+          </div>
+        </fieldset>
+
+        <fieldset class="form-section">
+          <legend>Wystawca</legend>
+          <label>Imię i nazwisko:</label>
+          <input type="text" name="wystawcaImie" required />
+          <label>Specjalizacja:</label>
+          <input type="text" name="wystawcaSpecjalizacja" />
+          <label>Numer telefonu:</label>
+          <input type="text" name="wystawcaTelefon" />
+          <label>Podpis (imię i nazwisko):</label>
+          <input type="text" name="wystawcaPodpis" placeholder="Wpisz swoje imię i nazwisko" />
+        </fieldset>
+
+        <div id="lekiContainer">
+          ${generatePojedynczaReceptaForm(receptaCounter)}
+        </div>
+        <div style="text-align:right; margin-top:10px;">
+          <button type="button" onclick="dodajRecepta()">+ Dodaj kolejny lek</button>
+        </div>
+
+        <button type="button" id="downloadBtn" onclick="downloadPDF()">Pobierz jako PDF</button>
+      </form>
+    `;
+  }
+
+  // Generuje jeden blok recepty (lek)
+  function generatePojedynczaReceptaForm(num){
+    // Budujemy opcje select z tooltipami
+    let options = leki.map(le => `
+      <option value="${le.nazwa}" 
+        data-dawkowanie="${le.dawkowanie}" 
+        data-dzialanie="${le.dzialanie}" 
+        data-substancja="${le.substancja}"
+        data-przeciwwskazania="${le.przeciwwskazania}">
+        ${le.nazwa}
+      </option>`).join('');
+
+    // Unikalne id elementów na podstawie numeru recepty
+    return `
+      <fieldset class="form-section lek-block" id="recepta_${num}">
+        <h3>Recepta ${num} <button type="button" class="remove-button" onclick="usunRecepta(${num})" ${num === 1 ? 'disabled title="Nie można usunąć pierwszej recepty"' : ''}>Usuń</button></h3>
+        <label>Na lek:</label>
+        <div class="tooltip">
+          <select id="lekSelect_${num}" name="lek_${num}" onchange="fillLekInfo(${num})" required>
+            <option value="">-- wybierz lek lub wpisz własny --</option>
+            ${options}
+            <option value="inny">Inny (wpisz nazwę poniżej)</option>
+          </select>
+          <div class="tiptext" id="tooltipInfo_${num}"></div>
+        </div>
+        <label>Nazwa własna leku (jeśli inny):</label>
+        <input type="text" id="customLekNazwa_${num}" name="customLekNazwa_${num}" oninput="clearTooltip(${num})" placeholder="Wpisz nazwę leku spoza listy" disabled />
+        <label>Dawkowanie:</label>
+        <input type="text" name="dawkowanie_${num}" id="dawkowanie_${num}" />
+        <label>Dodatkowe informacje:</label>
+        <textarea name="info_${num}" rows="3"></textarea>
+        <label>Data realizacji:</label>
+        <input type="date" name="dataRealizacji_${num}" />
+      </fieldset>
+    `;
+  }
+
+  // Dodaje nową receptę (lek)
+  function dodajRecepta(){
+    receptaCounter++;
+    const kontener = document.getElementById('lekiContainer');
+    kontener.insertAdjacentHTML('beforeend', generatePojedynczaReceptaForm(receptaCounter));
+  }
+
+  // Usuwa receptę
+  function usunRecepta(num){
+    if(num === 1) return; // nie usuwaj pierwszej recepty
+    const receptaEl = document.getElementById(`recepta_${num}`);
+    if(receptaEl){
+      receptaEl.remove();
+    }
+  }
+
+  // Funkcja do podpowiedzi i wypełniania dawkowania
+  function fillLekInfo(num) {
+    const sel = document.getElementById(`lekSelect_${num}`);
+    const tooltip = document.getElementById(`tooltipInfo_${num}`);
+    const customLek = document.getElementById(`customLekNazwa_${num}`);
+    const dawkowanieInput = document.getElementById(`dawkowanie_${num}`);
+
+    if(sel.value === "inny") {
+      tooltip.style.visibility = "hidden";
+      customLek.disabled = false;
+      dawkowanieInput.value = "";
+      dawkowanieInput.disabled = false;
+    } else if(sel.value === "") {
+      tooltip.style.visibility = "hidden";
+      customLek.disabled = true;
+      customLek.value = "";
+      dawkowanieInput.value = "";
+      dawkowanieInput.disabled = false;
+    } else {
+      customLek.disabled = true;
+      customLek.value = "";
+      dawkowanieInput.disabled = false;
+      const opt = sel.options[sel.selectedIndex];
+      tooltip.innerHTML = `
+        <strong>Dawkowanie:</strong> ${opt.dataset.dawkowanie}<br>
+        <strong>Działanie:</strong> ${opt.dataset.dzialanie}<br>
+        <strong>Substancja czynna:</strong> ${opt.dataset.substancja}<br>
+        <strong>Przeciwwskazania:</strong> ${opt.dataset.przeciwwskazania}
+      `;
+      tooltip.style.visibility = "visible";
+      dawkowanieInput.value = opt.dataset.dawkowanie;
+    }
+  }
+
+  function clearTooltip(num){
+    let tooltip = document.getElementById(`tooltipInfo_${num}`);
+    tooltip.style.visibility = "hidden";
+  }
+
+  function generateIDRecepty() {
+    const now = new Date();
+    const id = 
+      now.getFullYear().toString().slice(2) +
+      ("0"+(now.getMonth()+1)).slice(-2) +
+      ("0"+now.getDate()).slice(-2) +
+      ("0"+now.getHours()).slice(-2) +
+      ("0"+now.getMinutes()).slice(-2) +
+      ("0"+now.getSeconds()).slice(-2) +
+      Math.floor(1000 + Math.random()*9000).toString();
+    document.getElementById('idRecepty').innerText = id;
+  }
+
+  async function downloadPDF() {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+
+    const form = document.getElementById('receptaForm');
+    if (!form) {
+      alert('Najpierw wybierz formularz wystawienia recepty!');
+      return;
+    }
+
+    const darkBlue = '#002663';
+    const grey = '#333333';
+
+    // Nagłówek
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(darkBlue);
+    doc.setFontSize(20);
+    doc.text('RECEPTA', 105, 20, null, null, 'center');
+
+    doc.setDrawColor(darkBlue);
+    doc.setLineWidth(1.2);
+    doc.rect(10, 10, 190, 15);
+
+    doc.setFontSize(10);
+    doc.setTextColor(grey);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Dokument symulowany – nie jest prawdziwą receptą!', 105, 28, null, null, 'center');
+
+    // ID recepty
+    const idRecepty = document.getElementById('idRecepty').innerText || '-';
+    doc.setDrawColor(darkBlue);
+    doc.rect(150, 35, 50, 12);  
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.text('ID recepty:', 12, 42);
+    doc.setFont('helvetica', 'normal');
+    doc.text(idRecepty, 155, 43);
+
+    // Dane pacjenta
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Dane pacjenta:', 12, 55);
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Imię i nazwisko: ${form.pacjentImie.value}`, 12, 62);
+    doc.text(`PESEL: ${form.pacjentPesel.value}`, 12, 68);
+    doc.text(`Data urodzenia: ${form.pacjentData.value}`, 12, 74);
+    doc.text(`Miejsce zamieszkania: ${form.pacjentMiejsce.value}`, 12, 80);
+    doc.line(10, 83, 200, 83);
+
+    // Dane wystawcy
+    let ypos = 90;
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Dane wystawcy:', 12, ypos);
+    ypos += 6;
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Imię i nazwisko: ${form.wystawcaImie.value}`, 12, ypos);
+    ypos += 6;
+    doc.text(`Specjalizacja: ${form.wystawcaSpecjalizacja.value}`, 12, ypos);
+    ypos += 6;
+    doc.text(`Numer telefonu: ${form.wystawcaTelefon.value}`, 12, ypos);
+    doc.line(10, ypos + 4, 200, ypos + 4);
+
+    // Podpis - wymaga dodania czcionki "Caveat" do jsPDF (patrz mój poprzedni komunikat)
+    ypos += 15;
+    doc.setFont('helvetica', 'bolditalic');
+    doc.text('Podpis uprawnionego wystawcy:', 12, ypos);
+    ypos += 10;
+    const podpis = form.wystawcaPodpis.value || '_______________________';
+    // Jeżeli masz czcionkę Caveat załadowaną, odkomentuj następujące linie:
+    // doc.setFont('Caveat', 'normal');
+    // doc.setFontSize(22);
+    // doc.text(podpis, 12, ypos);
+    // doc.line(12, ypos + 2, 12 + doc.getStringUnitWidth(podpis) * 22 * 0.7, ypos + 2);
+    // Jeśli nie masz czcionki, użyj zwykłej:
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(16);
+    doc.text(podpis, 12, ypos);
+    ypos += 10;
+    doc.line(12, ypos, 12 + doc.getStringUnitWidth(podpis) * 16 * 0.7, ypos);
+
+    // Sekcja leków - dynamicznie iterujemy po receptach
+    ypos += 15;
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Recepty - leki:', 12, ypos);
+    ypos += 8;
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'normal');
+
+    for(let i=1; i<=receptaCounter; i++){
+      const lekSelect = form[`lek_${i}`];
+      if(!lekSelect) continue; // jeśli usunięta recepta
+
+      let lek = lekSelect.value === 'inny' ? form[`customLekNazwa_${i}`].value : lekSelect.value;
+      if(!lek) continue; // puste pole, pomijamy
+
+      // Pobierz dawkowanie, info itd.
+      let dawkowanie = form[`dawkowanie_${i}`]?.value || "";
+      let info = form[`info_${i}`]?.value || "";
+      let dataRealizacji = form[`dataRealizacji_${i}`]?.value || "";
+
+      doc.setFont('helvetica', 'bold');
+      doc.text(`Recepta ${i}:`, 12, ypos);
+      ypos += 6;
+      doc.setFont('helvetica', 'normal');
+      doc.text(`Na lek: ${lek}`, 12, ypos);
+      ypos += 6;
+      doc.text(`Dawkowanie: ${dawkowanie}`, 12, ypos);
+      ypos += 6;
+      doc.text(`Dodatkowe informacje:`, 12, ypos);
+      ypos += 6;
+      const lines = doc.splitTextToSize(info, 180);
+      doc.text(lines, 12, ypos);
+      ypos += lines.length * 6;
+      doc.text(`Data realizacji: ${dataRealizacji}`, 12, ypos);
+      ypos += 10;
+      doc.line(10, ypos, 200, ypos);
+      ypos += 8;
+      if(ypos > 270) { // jeżeli blisko końca strony, dodaj nową
+        doc.addPage();
+        ypos = 20;
+      }
+    }
+
+    // Stopka
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor('#555555');
+    const pageHeight = doc.internal.pageSize.height;
+    doc.text('Ta e-recepta jest symulacją i nie stanowi prawdziwego dokumentu medycznego.', 12, pageHeight - 20);
+    doc.text('Strona stworzona wyłącznie do celów edukacyjnych i rozrywkowych.', 12, pageHeight - 14);
+
+    doc.save(`recepta_${idRecepty}.pdf`);
+  }
+</script>
+</body>
+</html>
+
+
+
+
